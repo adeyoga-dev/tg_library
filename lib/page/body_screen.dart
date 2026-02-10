@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:screen_protector/screen_protector.dart'; // 1. Import this
+import 'package:screen_protector/screen_protector.dart';
 
-// 2. Change to StatefulWidget
+// Change to StatefulWidget
 class BodyScreen extends StatefulWidget {
   const BodyScreen({super.key});
 
@@ -41,13 +41,13 @@ class _BodyScreenState extends State<BodyScreen> {
   @override
   void initState() {
     super.initState();
-    // 3. Turn ON protection when screen loads
+    // Turn ON protection when screen loads
     _protectScreen();
   }
 
   @override
   void dispose() {
-    // 4. Turn OFF protection when screen closes
+    // Turn OFF protection when screen closes
     _unprotectScreen();
     super.dispose();
   }
@@ -79,7 +79,6 @@ class _BodyScreenState extends State<BodyScreen> {
         ),
         title: Row(
           children: [
-            // Note: Ensure this asset path exists in your project
             Image.asset('assets/images/logo_tg_120.png', height: 28, width: 28),
             const SizedBox(width: 8),
             const Text(
@@ -129,7 +128,6 @@ class _BodyScreenState extends State<BodyScreen> {
                   ),
                   child: Row(
                     children: [
-                      // Note: Ensure this asset path exists
                       Image.asset(
                         'assets/images/icon_book.png',
                         width: 40,
