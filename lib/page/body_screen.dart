@@ -1,38 +1,71 @@
 import 'package:flutter/material.dart';
+import 'package:screen_protector/screen_protector.dart'; // 1. Import this
 
-class BodyScreen extends StatelessWidget {
+// 2. Change to StatefulWidget
+class BodyScreen extends StatefulWidget {
   const BodyScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    final List<Map<String, String>> docs = [
-      {
-        'title': 'Perjanjian Kerja Bersama',
-        'date': '12 Feb, 09:37',
-        'author': 'Ricid Kumbara',
-      },
-      {
-        'title': 'Keselamatan dan Kesehatan Kerja',
-        'date': '6 Feb, 16:41',
-        'author': 'Ricid Kumbara',
-      },
-      {
-        'title': 'Code of Conduct',
-        'date': '16 Jan, 12:03',
-        'author': 'Ricid Kumbara',
-      },
-      {
-        'title': 'Instruksi Kerja',
-        'date': '03 Feb, 10:45',
-        'author': 'Ricid Kumbara',
-      },
-      {
-        'title': 'Struktur Organisasi',
-        'date': '6 Feb, 16:41',
-        'author': 'Ricid Kumbara',
-      },
-    ];
+  State<BodyScreen> createState() => _BodyScreenState();
+}
 
+class _BodyScreenState extends State<BodyScreen> {
+  final List<Map<String, String>> docs = [
+    {
+      'title': 'Perjanjian Kerja Bersama',
+      'date': '12 Feb, 09:37',
+      'author': 'Ricid Kumbara',
+    },
+    {
+      'title': 'Keselamatan dan Kesehatan Kerja',
+      'date': '6 Feb, 16:41',
+      'author': 'Ricid Kumbara',
+    },
+    {
+      'title': 'Code of Conduct',
+      'date': '16 Jan, 12:03',
+      'author': 'Ricid Kumbara',
+    },
+    {
+      'title': 'Instruksi Kerja',
+      'date': '03 Feb, 10:45',
+      'author': 'Ricid Kumbara',
+    },
+    {
+      'title': 'Struktur Organisasi',
+      'date': '6 Feb, 16:41',
+      'author': 'Ricid Kumbara',
+    },
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    // 3. Turn ON protection when screen loads
+    _protectScreen();
+  }
+
+  @override
+  void dispose() {
+    // 4. Turn OFF protection when screen closes
+    _unprotectScreen();
+    super.dispose();
+  }
+
+  Future<void> _protectScreen() async {
+    // Prevents screenshot (renders screen black on iOS)
+    await ScreenProtector.preventScreenshotOn();
+    // Blurs the app in the App Switcher (multitasking view)
+    await ScreenProtector.protectDataLeakageWithBlur();
+  }
+
+  Future<void> _unprotectScreen() async {
+    // Re-enable screenshots for the rest of the app
+    await ScreenProtector.preventScreenshotOff();
+  }
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Colors.white,
       appBar: AppBar(
@@ -46,6 +79,7 @@ class BodyScreen extends StatelessWidget {
         ),
         title: Row(
           children: [
+            // Note: Ensure this asset path exists in your project
             Image.asset('assets/images/logo_tg_120.png', height: 28, width: 28),
             const SizedBox(width: 8),
             const Text(
@@ -95,6 +129,7 @@ class BodyScreen extends StatelessWidget {
                   ),
                   child: Row(
                     children: [
+                      // Note: Ensure this asset path exists
                       Image.asset(
                         'assets/images/icon_book.png',
                         width: 40,
