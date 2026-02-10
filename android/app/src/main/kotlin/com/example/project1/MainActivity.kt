@@ -8,6 +8,6 @@ class MainActivity: FlutterActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
         // Baris ini yang mencegah screenshot dan screen record
-        window.addFlags(LayoutParams.FLAG_SECURE)
+        // window.addFlags(LayoutParams.FLAG_SECURE)
     }
 }
