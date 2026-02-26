@@ -3,6 +3,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:screen_protector/screen_protector.dart';
+import 'package:intl/intl.dart';
 import 'welcome_screen.dart';
 import 'pdf_viewer_screen.dart';
 
@@ -28,12 +29,17 @@ class _BodyScreenState extends State<BodyScreen> {
 
   List<dynamic> documents = [];
   bool isLoading = false;
+
+  String? userName;
+  String? userNpk;
+
   final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
     super.initState();
     _protectScreen();
+    _loadUser();
     _fetchDocuments();
   }
 
@@ -53,8 +59,15 @@ class _BodyScreenState extends State<BodyScreen> {
     await ScreenProtector.preventScreenshotOff();
   }
 
+  Future<void> _loadUser() async {
+    userName = await _secureStorage.read(key: 'user_name');
+    userNpk = await _secureStorage.read(key: 'user_npk');
+    setState(() {});
+  }
+
   Future<void> _logout() async {
     await _secureStorage.deleteAll();
+
     if (!mounted) return;
 
     Navigator.pushAndRemoveUntil(
@@ -73,7 +86,7 @@ class _BodyScreenState extends State<BodyScreen> {
     try {
       final response = await _dio.get(
         '/app-hris/api/v1/document-centers/list',
-        queryParameters: {"keyword": keyword.isEmpty ? "" : keyword},
+        queryParameters: {"keyword": keyword},
         options: Options(headers: {"Authorization": "Bearer $token"}),
       );
 
@@ -91,7 +104,6 @@ class _BodyScreenState extends State<BodyScreen> {
 
   Future<void> _downloadAndOpen(String url, String title) async {
     final token = await _secureStorage.read(key: 'auth_token');
-
     final dir = await getApplicationDocumentsDirectory();
     final filePath = "${dir.path}/${title.replaceAll(' ', '_')}.pdf";
 
@@ -113,6 +125,14 @@ class _BodyScreenState extends State<BodyScreen> {
     } catch (e) {
       debugPrint("Download error: $e");
     }
+  }
+
+  String formatDate(String dateString) {
+    final dateUtc = DateTime.parse(dateString);
+    final dateLocal = dateUtc.toLocal();
+    final formatter = DateFormat("d MMM, HH:mm");
+    final formatted = formatter.format(dateLocal);
+    return formatted;
   }
 
   @override
@@ -141,6 +161,59 @@ class _BodyScreenState extends State<BodyScreen> {
                 ],
               ),
             ),
+
+            /// SOFTLINE + PROFILE
+            Stack(
+              children: [
+                Image.asset(
+                  'assets/images/softline.png',
+                  height: 110,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
+                Positioned(
+                  left: 16,
+                  top: 25,
+                  child: Row(
+                    children: [
+                      const CircleAvatar(
+                        radius: 28,
+                        backgroundColor: Color(0xFFEFF6FB),
+                        child: Icon(
+                          Icons.person,
+                          size: 32,
+                          color: Color(0xFF4A5568),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            "Hallo, ${userName ?? ''}",
+                            style: const TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: Color(0xFF2C3E50),
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            userNpk ?? '',
+                            style: const TextStyle(
+                              fontSize: 13,
+                              color: Color(0xFF607D8B),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+
+            const SizedBox(height: 20),
 
             /// SEARCH
             Padding(
@@ -173,60 +246,112 @@ class _BodyScreenState extends State<BodyScreen> {
 
             /// LIST
             Expanded(
-              child: isLoading
-                  ? const Center(child: CircularProgressIndicator())
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: documents.length,
-                      itemBuilder: (context, index) {
-                        final doc = documents[index];
-
-                        return GestureDetector(
-                          onTap: () =>
-                              _downloadAndOpen(doc['file_url'], doc['name']),
-                          child: Container(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            padding: const EdgeInsets.all(12),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF3F5566),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Row(
-                              children: [
-                                Image.asset(
-                                  'assets/images/icon_book.png',
-                                  width: 40,
-                                ),
-                                const SizedBox(width: 15),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        doc['name'],
-                                        style: const TextStyle(
-                                          color: Colors.white,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
-                                      const SizedBox(height: 6),
-                                      Text(
-                                        doc['dept'] ?? '',
-                                        style: const TextStyle(
-                                          color: Colors.white70,
-                                          fontSize: 12,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                              ],
+              child: RefreshIndicator(
+                onRefresh: _fetchDocuments,
+                child: isLoading && documents.isEmpty
+                    ? ListView(
+                        children: const [
+                          SizedBox(
+                            height: 400,
+                            child: Center(child: CircularProgressIndicator()),
+                          ),
+                        ],
+                      )
+                    : documents.isEmpty
+                    ? ListView(
+                        children: const [
+                          SizedBox(
+                            height: 400,
+                            child: Center(
+                              child: Text(
+                                "Data tidak ditemukan",
+                                style: TextStyle(color: Colors.grey),
+                              ),
                             ),
                           ),
-                        );
-                      },
-                    ),
+                        ],
+                      )
+                    : ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: documents.length,
+                        itemBuilder: (context, index) {
+                          final doc = documents[index];
+
+                          return GestureDetector(
+                            onTap: () =>
+                                _downloadAndOpen(doc['file_url'], doc['name']),
+                            child: Container(
+                              margin: const EdgeInsets.only(bottom: 12),
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3F5566),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: Row(
+                                children: [
+                                  Image.asset(
+                                    'assets/images/icon_book.png',
+                                    width: 40,
+                                  ),
+                                  const SizedBox(width: 15),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          doc['name'],
+                                          style: const TextStyle(
+                                            color: Colors.white,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 6),
+                                        Row(
+                                          children: [
+                                            const Icon(
+                                              Icons.access_time,
+                                              size: 14,
+                                              color: Colors.white70,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              formatDate(doc['created_at']),
+                                              style: const TextStyle(
+                                                color: Colors.white70,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            const SizedBox(width: 16),
+                                            const Icon(
+                                              Icons.person,
+                                              size: 14,
+                                              color: Colors.white70,
+                                            ),
+                                            const SizedBox(width: 4),
+                                            Expanded(
+                                              child: Text(
+                                                doc['created_by'] ?? '-',
+                                                style: const TextStyle(
+                                                  color: Colors.white70,
+                                                  fontSize: 12,
+                                                ),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+              ),
             ),
           ],
         ),
