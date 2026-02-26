@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
-import 'body_screen.dart'; // pastikan BodyScreen ada di project
-
-// Jika nanti mau pakai API, uncomment import ini dan tambahkan package di pubspec.yaml
-// import 'package:dio/dio.dart';
-// import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:dio/dio.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'body_screen.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -18,15 +16,17 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   final _passwordCtl = TextEditingController();
   bool _isLoading = false;
 
-  // Dummy credentials (saat ini dipakai)
-  // Ubah sesuai kebutuhan dev / staging
-  final Map<String, String> _dummyCred = {
-    'username': '1234',
-    'password': '1234',
-  };
+  final Dio _dio = Dio(
+    BaseOptions(
+      baseUrl: 'https://one-portal.tgidn.co.id',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+    ),
+  );
 
-  // Jika pakai secure storage nanti:
-  // final _secureStorage = const FlutterSecureStorage();
+  final FlutterSecureStorage _secureStorage = const FlutterSecureStorage();
 
   @override
   void dispose() {
@@ -37,86 +37,67 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
 
   Future<void> _doLogin() async {
     if (!_formKey.currentState!.validate()) return;
+
     setState(() => _isLoading = true);
 
-    final inputUsername = _usernameCtl.text.trim();
-    final inputPassword = _passwordCtl.text;
-
-    // ---------- DUMMY AUTH (aktif) ----------
-    await Future.delayed(const Duration(milliseconds: 700)); // simulate delay
-
-    if (inputUsername == _dummyCred['username'] &&
-        inputPassword == _dummyCred['password']) {
-      setState(() => _isLoading = false);
-      // Login sukses: lanjut ke BodyScreen
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (_) => const BodyScreen()),
+    try {
+      final response = await _dio.post(
+        '/app-hris/api/v1/login',
+        data: {
+          "login_field": _usernameCtl.text.trim(),
+          "password": _passwordCtl.text,
+        },
       );
-      return;
+
+      if (response.statusCode == 200) {
+        final data = response.data;
+
+        final String token = data['token'];
+        final user = data['user'];
+
+        // Simpan token & user
+        await _secureStorage.write(key: 'auth_token', value: token);
+        await _secureStorage.write(
+          key: 'user_name',
+          value: user['name'].toString(),
+        );
+        await _secureStorage.write(
+          key: 'user_npk',
+          value: user['employee_npk'].toString(),
+        );
+
+        if (!mounted) return;
+
+        Navigator.pushReplacement(
+          context,
+          MaterialPageRoute(builder: (_) => const BodyScreen()),
+        );
+      }
+    } on DioException catch (e) {
+      String message = "Login gagal";
+
+      if (e.response != null) {
+        if (e.response?.statusCode == 401) {
+          message = e.response?.data['errors'] ?? "Username / Password salah";
+        }
+      }
+
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(message)));
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text("Terjadi kesalahan")));
+      }
+    } finally {
+      if (mounted) {
+        setState(() => _isLoading = false);
+      }
     }
-
-    // Jika gagal
-    setState(() => _isLoading = false);
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Username atau password salah (dummy).')),
-    );
-
-    // ---------- END DUMMY ----------
-    //
-    // ---------- CONTOH KODE API LOGIN (KOMENTAR) ----------
-    //
-    // Jika kamu ingin mengganti ke API Laravel Sanctum yang mengembalikan token:
-    //
-    // 1) Tambahkan dependency di pubspec.yaml:
-    //    dio: ^5.0.0
-    //    flutter_secure_storage: ^8.0.0
-    //
-    // 2) Uncomment import di atas dan method berikut lalu sesuaikan BASE_URL & endpoint.
-    //
-    // try {
-    //   final dio = Dio(BaseOptions(baseUrl: 'https://example.com'));
-    //   final resp = await dio.post('/api/login', data: {
-    //     'username': inputUsername,
-    //     'password': inputPassword,
-    //   });
-    //
-    //   // Asumsikan backend mengembalikan: { "token": "xxxx" }
-    //   if (resp.statusCode == 200 && resp.data['token'] != null) {
-    //     final token = resp.data['token'] as String;
-    //
-    //     // Simpan token dengan secure storage
-    //     await _secureStorage.write(key: 'auth_token', value: token);
-    //
-    //     // Set header default untuk request berikutnya
-    //     dio.options.headers['Authorization'] = 'Bearer $token';
-    //
-    //     // navigasi ke BodyScreen
-    //     Navigator.pushReplacement(
-    //       context,
-    //       MaterialPageRoute(builder: (_) => const BodyScreen()),
-    //     );
-    //     return;
-    //   } else {
-    //     throw Exception('Login gagal: ${resp.data}');
-    //   }
-    // } catch (err) {
-    //   ScaffoldMessenger.of(context).showSnackBar(
-    //     SnackBar(content: Text('Login API error: $err')),
-    //   );
-    // } finally {
-    //   setState(() => _isLoading = false);
-    // }
-    //
-    // Catatan Laravel (backend):
-    // - Buat endpoint POST /api/login yang memverifikasi credential.
-    // - Jika valid, buat token: $token = $user->createToken('mobile')->plainTextToken;
-    // - Kembalikan JSON { "token": $token, "user": $user }
-    //
-    // Setelah menerima token: tambahkan header Authorization: "Bearer <token>"
-    // untuk request berikutnya (contoh: GET /api/documents).
-    //
-    // ------------------------------------------------------
   }
 
   @override
@@ -130,7 +111,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         child: Stack(
           alignment: Alignment.topCenter,
           children: [
-            // 1) Gambar gedung yang di-clip melengkung
             ClipPath(
               clipper: TopCurveClipper(),
               child: Container(
@@ -144,8 +124,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
               ),
             ),
-
-            // 2) Softline overlay (letakkan sedikit di bawah curve)
             Positioned(
               top: topImageHeight - 70,
               left: -20,
@@ -159,8 +137,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
               ),
             ),
-
-            // 3) Card / form yang berada di bagian bawah (mengambang)
             Align(
               alignment: Alignment.bottomCenter,
               child: SingleChildScrollView(
@@ -170,7 +146,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                 ),
                 child: Container(
                   width: double.infinity,
-                  // tinggi minimal agar mirip layout mobile
                   constraints: BoxConstraints(
                     minHeight: media.size.height * 0.45,
                   ),
@@ -190,9 +165,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                     vertical: 28,
                   ),
                   child: Column(
-                    mainAxisSize: MainAxisSize.min,
                     children: [
-                      const SizedBox(height: 6),
                       const Text(
                         'Welcome Back!',
                         style: TextStyle(
@@ -201,117 +174,50 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
                           color: Color(0xFF2C3E50),
                         ),
                       ),
-                      const SizedBox(height: 8),
-                      const Text(
-                        'Masuk untuk mengakses dokumen Anda',
-                        style: TextStyle(
-                          fontSize: 14,
-                          color: Color(0xFF607D8B),
-                        ),
-                      ),
                       const SizedBox(height: 18),
-
-                      // FORM
                       Form(
                         key: _formKey,
                         child: Column(
                           children: [
-                            // Username
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'Username',
-                                style: TextStyle(
-                                  color: Colors.grey[700],
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
                             TextFormField(
                               controller: _usernameCtl,
-                              keyboardType: TextInputType.text,
                               decoration: InputDecoration(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 14,
-                                ),
+                                hintText: 'Username / Email',
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                hintText: 'Masukkan username',
                               ),
-                              validator: (v) => (v == null || v.trim().isEmpty)
+                              validator: (v) => (v == null || v.isEmpty)
                                   ? 'Username wajib diisi'
                                   : null,
                             ),
                             const SizedBox(height: 14),
-
-                            // Password
-                            Align(
-                              alignment: Alignment.centerLeft,
-                              child: Text(
-                                'Password',
-                                style: TextStyle(
-                                  color: Colors.grey[700],
-                                  fontWeight: FontWeight.w600,
-                                ),
-                              ),
-                            ),
-                            const SizedBox(height: 8),
                             TextFormField(
                               controller: _passwordCtl,
                               obscureText: true,
                               decoration: InputDecoration(
-                                contentPadding: const EdgeInsets.symmetric(
-                                  horizontal: 12,
-                                  vertical: 14,
-                                ),
+                                hintText: 'Password',
                                 border: OutlineInputBorder(
                                   borderRadius: BorderRadius.circular(8),
                                 ),
-                                hintText: '••••••••',
                               ),
                               validator: (v) => (v == null || v.isEmpty)
                                   ? 'Password wajib diisi'
                                   : null,
                             ),
                             const SizedBox(height: 20),
-
-                            // Login button
                             SizedBox(
                               width: double.infinity,
                               height: 48,
                               child: ElevatedButton(
                                 onPressed: _isLoading ? null : _doLogin,
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: const Color(0xFF2D9CDB),
-                                  shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10),
-                                  ),
-                                ),
                                 child: _isLoading
-                                    ? const SizedBox(
-                                        width: 20,
-                                        height: 20,
-                                        child: CircularProgressIndicator(
-                                          strokeWidth: 2,
-                                          valueColor: AlwaysStoppedAnimation(
-                                            Colors.white,
-                                          ),
-                                        ),
+                                    ? const CircularProgressIndicator(
+                                        color: Colors.white,
                                       )
-                                    : const Text(
-                                        'Login',
-                                        style: TextStyle(
-                                          fontSize: 16,
-                                          fontWeight: FontWeight.bold,
-                                        ),
-                                      ),
+                                    : const Text('Login'),
                               ),
                             ),
-
-                            const SizedBox(height: 6),
                           ],
                         ),
                       ),
@@ -327,7 +233,6 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   }
 }
 
-/// Clipper untuk membuat potongan melengkung seperti screenshot.
 class TopCurveClipper extends CustomClipper<Path> {
   @override
   Path getClip(Size size) {
