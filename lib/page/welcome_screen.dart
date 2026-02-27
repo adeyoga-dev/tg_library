@@ -19,6 +19,7 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
   final Dio _dio = Dio(
     BaseOptions(
       baseUrl: 'https://one-portal.tgidn.co.id',
+      responseType: ResponseType.json,
       headers: {
         'Content-Type': 'application/json',
         'Accept': 'application/json',
@@ -74,11 +75,20 @@ class _WelcomeScreenState extends State<WelcomeScreen> {
         );
       }
     } on DioException catch (e) {
-      String message = "Login gagal";
+      String message = "Terjadi kesalahan koneksi"; // Default yang lebih umum
 
       if (e.response != null) {
-        if (e.response?.statusCode == 401) {
-          message = e.response?.data['errors'] ?? "Username / Password salah";
+        // Ambil pesan dari server jika ada, apa pun status code-nya (400, 401, 422, dll)
+        final serverMessage =
+            e.response?.data['errors'] ?? e.response?.data['message'];
+        message = serverMessage ?? "Error ${e.response?.statusCode}";
+      } else {
+        // Jika server tidak merespon (e.response == null)
+        if (e.type == DioExceptionType.connectionTimeout) {
+          message = "Koneksi RTO";
+        }
+        if (e.type == DioExceptionType.connectionError) {
+          message = "Tidak ada internet";
         }
       }
 
