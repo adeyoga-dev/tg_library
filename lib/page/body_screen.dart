@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -102,10 +104,41 @@ class _BodyScreenState extends State<BodyScreen> {
     setState(() => isLoading = false);
   }
 
-  Future<void> _downloadAndOpen(String url, String title) async {
+  String _buildStorageKey(String title) =>
+      'doc_build_${title.replaceAll(' ', '_').toLowerCase()}';
+
+  Future<void> _downloadAndOpen(
+    String url,
+    String title,
+    String? serverBuildNumber,
+  ) async {
     final token = await _secureStorage.read(key: 'auth_token');
     final dir = await getApplicationDocumentsDirectory();
     final filePath = "${dir.path}/${title.replaceAll(' ', '_')}.pdf";
+    final file = File(filePath);
+    final buildKey = _buildStorageKey(title);
+    final savedBuildNumber = await _secureStorage.read(key: buildKey);
+    final normalizedServerBuildNumber = serverBuildNumber?.trim();
+
+    final isSameBuild = normalizedServerBuildNumber != null &&
+        normalizedServerBuildNumber.isNotEmpty &&
+        savedBuildNumber == normalizedServerBuildNumber;
+
+    if (await file.exists() && isSameBuild) {
+      if (!mounted) return;
+
+      Navigator.push(
+        context,
+        MaterialPageRoute(
+          builder: (_) => PdfViewerScreen(title: title, filePath: filePath),
+        ),
+      );
+      return;
+    }
+
+    if (await file.exists() && !isSameBuild) {
+      await file.delete();
+    }
 
     try {
       await _dio.download(
@@ -113,6 +146,14 @@ class _BodyScreenState extends State<BodyScreen> {
         filePath,
         options: Options(headers: {"Authorization": "Bearer $token"}),
       );
+
+      if (normalizedServerBuildNumber != null &&
+          normalizedServerBuildNumber.isNotEmpty) {
+        await _secureStorage.write(
+          key: buildKey,
+          value: normalizedServerBuildNumber,
+        );
+      }
 
       if (!mounted) return;
 
@@ -279,8 +320,11 @@ class _BodyScreenState extends State<BodyScreen> {
                           final doc = documents[index];
 
                           return GestureDetector(
-                            onTap: () =>
-                                _downloadAndOpen(doc['file_url'], doc['name']),
+                            onTap: () => _downloadAndOpen(
+                              doc['file_url'],
+                              doc['name'],
+                              doc['build_number']?.toString(),
+                            ),
                             child: Container(
                               margin: const EdgeInsets.only(bottom: 12),
                               padding: const EdgeInsets.all(12),
